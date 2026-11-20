@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Precision Indic Input (Cloud Sync)</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); padding: 16px; }
+    .container { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1.45fr 1fr; gap: 18px; }
+    @media (max-width: 820px) { .container { grid-template-columns: 1fr; padding-bottom: 60px; } }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    h1 { font-size: 1.3rem; margin: 0 0 4px; }
+    h2 { font-size: 1.05rem; margin: 0 0 10px; }
+    p.sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 12px; }
+
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    button {
+      background: var(--primary); color: #fff; border: none; padding: 8px 13px;
+      border-radius: 8px; font-size: 0.85rem; font-weight: 500; cursor: pointer;
+    }
+    button:hover { background: var(--primary-hover); }
+    button.secondary { background: #e2e8f0; color: var(--text); }
+    button.secondary:hover { background: #cbd5e1; }
+    button.danger { background: #fee2e2; color: #b91c1c; padding: 4px 8px; font-size: 0.76rem; }
+
+    textarea#editor {
+      width: 100%; height: 280px; padding: 14px; font-size: 1.25rem; line-height: 1.75;
+      border: 2px solid var(--border); border-radius: 10px; resize: vertical; outline: none;
+    }
+    textarea#editor:focus { border-color: var(--primary); }
+
+    /* Suggestion Bar (Sticky on mobile so it stays right above phone keyboard) */
+    .suggestion-bar {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      min-height: 48px; padding: 8px 10px; margin-top: 10px;
+      background: #f1f5f9; border-radius: 8px; border: 1px solid var(--border);
+    }
+    @media (max-width: 820px) {
+      .suggestion-bar { position: sticky; bottom: 8px; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    }
+    .suggestion-chip {
+      background: #fff; border: 1.5px solid var(--primary); color: var(--text);
+      padding: 6px 12px; border-radius: 6px; font-size: 1.15rem; cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .suggestion-chip:hover, .suggestion-chip.active { background: var(--primary); color: #fff; }
+    .suggestion-chip span.num { font-size: 0.72rem; opacity: 0.7; font-weight: bold; }
+
+    .badge {
+      font-size: 0.72rem; padding: 3px 8px; border-radius: 99px; font-weight: 600; margin-left: auto;
+    }
+    .badge.tier1 { background: #dcfce7; color: #166534; }
+    .badge.tier2 { background: #dbeafe; color: #1e40af; }
+    .badge.tier3 { background: #fef9c3; color: #854d0e; }
+
+    /* Cloud Sync Bar */
+    .sync-box {
+      background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+      padding: 10px 12px; margin-bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    .sync-status { font-size: 0.8rem; font-weight: 600; color: #1e40af; }
+
+    .tabs { display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .tab-btn { background: transparent; color: var(--muted); padding: 5px 10px; }
+    .tab-btn.active { background: #eff6ff; color: var(--primary); font-weight: 600; }
+
+    .form-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    input[type="text"], input[type="password"], select, textarea.bulk-box {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 0.9rem;
+    }
+    textarea.bulk-box { height: 110px; font-family: monospace; font-size: 0.85rem; }
+
+    .dict-list {
+      max-height: 250px; overflow-y: auto; border: 1px solid var(--border);
+      border-radius: 8px; margin-top: 10px;
+    }
+    .dict-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 0.9rem;
+    }
+    .dict-item:last-child { border-bottom: none; }
+    .dict-key { font-weight: 600; color: var(--primary); }
+
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; background: #0f172a; color: #fff;
+      padding: 10px 16px; border-radius: 8px; font-size: 0.88rem; display: none; z-index: 100;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- LEFT: SMART TYPING PAD -->
+  <div class="card">
+    <h1>Precision Indic Input (Hindi & Sanskrit)</h1>
+    <p class="sub">Cloud-synced precision transliteration for Laptop, Mobile, Tablet & Café PCs.</p>
+
+    <div class="toolbar">
+      <button onclick="copyText()">Copy Text</button>
+      <button class="secondary" onclick="clearEditor()">Clear</button>
+      <select id="langMode" style="width:auto;" onchange="updateSuggestions()">
+        <option value="both">Mode: Hindi + Sanskrit</option>
+        <option value="hindi">Mode: Hindi Only</option>
+        <option value="sanskrit">Mode: Sanskrit Only</option>
+      </select>
+      <label style="font-size:0.84rem; margin-left:auto; cursor:pointer;">
+        <input type="checkbox" id="toggleTranslit" checked /> Active
+      </label>
+    </div>
+
+    <textarea id="editor" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+      placeholder="यहाँ लिखें... (Type 'spasht', 'twarit', 'kumar', 'maa' and tap Space or chip)"></textarea>
+
+    <div class="suggestion-bar" id="suggestionBar">
+      <span style="color:var(--muted); font-size:0.85rem;">Start typing in Roman to see precision suggestions...</span>
+    </div>
+  </div>
+
+  <!-- RIGHT: CLOUD SYNC & PRECISION DICTIONARY -->
+  <div class="card">
+    <!-- CLOUD SYNC PANEL -->
+    <div class="sync-box">
+      <div style="flex:1; min-width:160px;">
+        <div class="sync-status" id="syncStatus">Local Mode (Enter Sync Key to sync devices)</div>
+        <input type="text" id="syncKeyInput" placeholder="Enter your private Sync Key (e.g. myindic2026)" style="margin-top:6px; background:#fff;" />
+      </div>
+      <div style="display:flex; gap:6px; align-self:flex-end;">
+        <button onclick="connectCloud()">Sync Now</button>
+        <button class="secondary" onclick="disconnectCloud()" title="Clear key on public/café PC">Log Out</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabSingle" onclick="switchTab('single')">Manage Rules</button>
+      <button class="tab-btn" id="tabBulk" onclick="switchTab('bulk')">Bulk Import / Export</button>
+    </div>
+
+    <!-- TAB 1: SINGLE RULE EDITOR -->
+    <div id="panelSingle">
+      <div class="form-row">
+        <input type="text" id="newRoman" placeholder="Roman (e.g. spasht)" />
+        <input type="text" id="newDeva" placeholder="Output (e.g. स्पष्ट)" />
+      </div>
+      <div class="toolbar">
+        <button onclick="addRule()">+ Save Rule</button>
+        <input type="text" id="searchDict" placeholder="Search..." style="width: 140px; margin-left:auto;" oninput="renderDictList()" />
+      </div>
+      <div class="dict-list" id="dictList"></div>
+    </div>
+
+    <!-- TAB 2: BULK IMPORT / EXPORT -->
+    <div id="panelBulk" style="display:none;">
+      <p class="sub">Paste rules (one per line: <code>roman = word1, word2</code>):</p>
+      <textarea class="bulk-box" id="bulkInput" placeholder="karya = कार्य&#10;adhyayan = अध्ययन&#10;sanskritam = संस्कृतम्"></textarea>
+      <div class="toolbar" style="margin-top:10px;">
+        <button onclick="importBulk()">Import Lines</button>
+        <button class="secondary" onclick="exportRules()">Download JSON</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // =========================================================================
+  // STEP 1: PASTE YOUR FIREBASE REALTIME DATABASE URL BELOW (No trailing slash)
+  // =========================================================================
+  const FIREBASE_DB_URL = "https://precision-indic-tool-default-rtdb.asia-southeast1.firebasedatabase.app/";
+
+  const DEFAULT_RULES = {
+    "spasht": ["स्पष्ट"],
+    "twarit": ["त्वरित"],
+    "kumar": ["कुमार"],
+    "maa": ["माँ", "मा"]
+  };
+
+  let customDict = JSON.parse(localStorage.getItem("precision_indic_dict_v3")) || DEFAULT_RULES;
+  let activeSyncKey = localStorage.getItem("precision_indic_sync_key") || "";
+
+  // =========================================================================
+  // CLOUD SYNC ENGINE (Firebase REST API - Zero SDK bloat, works everywhere)
+  // =========================================================================
+  function sanitizeKey(k) {
+    return k.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  }
+
+  async function pullFromCloud(key) {
+    if (!FIREBASE_DB_URL.includes("firebaseio.com") || FIREBASE_DB_URL.includes("YOUR-PROJECT-ID")) {
+      updateSyncUI("Firebase URL not set yet (Using Local Storage)");
+      return;
+    }
+    try {
+      updateSyncUI("Syncing...");
+      const res = await fetch(`${FIREBASE_DB_URL}/dictionaries/${key}.json`);
+      const cloudData = await res.json();
+      if (cloudData && typeof cloudData === "object") {
+        // Merge cloud rules with local rules (cloud takes priority)
+        customDict = { ...customDict, ...cloudData };
+        localStorage.setItem("precision_indic_dict_v3", JSON.stringify(customDict));
+        renderDictList();
+        updateSyncUI(`Synced (${Object.keys(customDict).length} rules)`);
+        showToast("Cloud dictionary loaded!");
+      } else {
+        // First time using this key: push current dictionary to cloud
+        await pushToCloud(key);
+      }
+    } catch (err) {
+      updateSyncUI("Offline / Sync Error (Using Local Copy)");
+    }
+  }
+
+  async function pushToCloud(key) {
+    if (!key || !FIREBASE_DB_URL.includes("firebaseio.com") || FIREBASE_DB_URL.includes("YOUR-PROJECT-ID")) return;
+    try {
+      await fetch(`${FIREBASE_DB_URL}/dictionaries/${key}.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(customDict)
+      });
+      updateSyncUI(`Synced (${Object.keys(customDict).length} rules)`);
+    } catch (err) {
+      updateSyncUI("Saved locally (Will sync when online)");
+    }
+  }
+
+  function connectCloud() {
+    const raw = document.getElementById("syncKeyInput").value;
+    const clean = sanitizeKey(raw);
+    if (clean.length < 4) return showToast("Use a Sync Key with at least 4 letters/numbers.");
+    activeSyncKey = clean;
+    localStorage.setItem("precision_indic_sync_key", activeSyncKey);
+    pullFromCloud(activeSyncKey);
+  }
+
+  function disconnectCloud() {
+    // Helpful when finishing a session on a public/café computer
+    activeSyncKey = "";
+    localStorage.removeItem("precision_indic_sync_key");
+    document.getElementById("syncKeyInput").value = "";
+    updateSyncUI("Logged out (Safe for public PC)");
+    showToast("Disconnected from cloud sync.");
+  }
+
+  function updateSyncUI(text) {
+    document.getElementById("syncStatus").textContent = text;
+  }
+
+  if (activeSyncKey) {
+    document.getElementById("syncKeyInput").value = activeSyncKey;
+    pullFromCloud(activeSyncKey);
+  }
+
+  // =========================================================================
+  // TIER 2: VERIFIED HINDI & SANSKRIT LEXICON
+  // =========================================================================
+  const VERIFIED_LEXICON = {
+    "namaste": { hi: ["नमस्ते"], sa: ["नमस्ते"] },
+    "namaskar": { hi: ["नमस्कार"], sa: ["नमस्कारः", "नमस्कार"] },
+    "dhanyavad": { hi: ["धन्यवाद"], sa: ["धन्यवादः", "धन्यवाद"] },
+    "pranam": { hi: ["प्रणाम"], sa: ["प्रणामः", "प्रणाम"] },
+    "swagat": { hi: ["स्वागत"], sa: ["स्वागतम्", "स्वागत"] },
+    "bharat": { hi: ["भारत"], sa: ["भारतम्", "भारत"] },
+    "hindi": { hi: ["हिन्दी", "हिंदी"], sa: ["हिन्दी"] },
+    "sanskrit": { hi: ["संस्कृत"], sa: ["संस्कृतम्", "संस्कृत"] },
+    "bhasha": { hi: ["भाषा"], sa: ["भाषा"] },
+    "gyan": { hi: ["ज्ञान"], sa: ["ज्ञानम्", "ज्ञान"] },
+    "vidya": { hi: ["विद्या"], sa: ["विद्या"] },
+    "vidyalaya": { hi: ["विद्यालय"], sa: ["विद्यालयः", "विद्यालय"] },
+    "shanti": { hi: ["शांति", "शान्ति"], sa: ["शान्तिः", "शान्ति"] },
+    "satya": { hi: ["सत्य"], sa: ["सत्यम्", "सत्य"] },
+    "dharma": { hi: ["धर्म"], sa: ["धर्मः", "धर्म"] },
+    "dharm": { hi: ["धर्म"], sa: ["धर्मः"] },
+    "karma": { hi: ["कर्म"], sa: ["कर्म"] },
+    "karm": { hi: ["कर्म"], sa: ["कर्म"] },
+    "karya": { hi: ["कार्य"], sa: ["कार्यम्", "कार्य"] },
+    "samay": { hi: ["समय"], sa: ["समयः", "समय"] },
+    "jeevan": { hi: ["जीवन"], sa: ["जीवनम्", "जीवन"] },
+    "manav": { hi: ["मानव"], sa: ["मानवः", "मानव"] },
+    "mitra": { hi: ["मित्र"], sa: ["मित्रम्", "मित्र"] },
+    "guru": { hi: ["गुरु"], sa: ["गुरुः", "गुरु"] },
+    "shishya": { hi: ["शिष्य"], sa: ["शिष्यः", "शिष्य"] },
+    "pustak": { hi: ["पुस्तक"], sa: ["पुस्तकम्", "पुस्तक"] },
+    "adhyayan": { hi: ["अध्ययन"], sa: ["अध्ययनम्", "अध्ययन"] },
+    "shiksha": { hi: ["शिक्षा"], sa: ["शिक्षा"] },
+    "pariksha": { hi: ["परीक्षा"], sa: ["परीक्षा"] },
+    "uttar": { hi: ["उत्तर"], sa: ["उत्तरम्", "उत्तर"] },
+    "prashn": { hi: ["प्रश्न"], sa: ["प्रश्नः", "प्रश्न"] },
+    "prashna": { hi: ["प्रश्न"], sa: ["प्रश्नः", "प्रश्न"] },
+    "kal": { hi: ["कल", "काल"], sa: ["कालः"] },
+    "aaj": { hi: ["आज"], sa: ["अद्य"] },
+    "shubh": { hi: ["शुभ"], sa: ["शुभम्", "शुभ"] },
+    "prabhat": { hi: ["प्रभात"], sa: ["प्रभातम्", "प्रभात"] },
+    "sandhya": { hi: ["संध्या", "सन्ध्या"], sa: ["सन्ध्या"] },
+    "ratri": { hi: ["रात्रि"], sa: ["रात्रिः", "रात्रि"] },
+    "surya": { hi: ["सूर्य"], sa: ["सूर्यः", "सूर्य"] },
+    "chandra": { hi: ["चन्द्र", "चंद्र"], sa: ["चन्द्रः", "चन्द्र"] },
+    "prithvi": { hi: ["पृथ्वी"], sa: ["पृथ्वी"] },
+    "jal": { hi: ["जल"], sa: ["जलम्", "जल"] },
+    "agni": { hi: ["अग्नि"], sa: ["अग्निः", "अग्नि"] },
+    "vayu": { hi: ["वायु"], sa: ["वायुः", "वायु"] },
+    "akash": { hi: ["आकाश"], sa: ["आकाशः", "आकाश"] },
+    "vishwa": { hi: ["विश्व"], sa: ["विश्वम्", "विश्व"] },
+    "rashtra": { hi: ["राष्ट्र"], sa: ["राष्ट्रम्", "राष्ट्र"] },
+    "samaj": { hi: ["समाज"], sa: ["समाजः", "समाज"] },
+    "vyakti": { hi: ["व्यक्ति"], sa: ["व्यक्तिः", "व्यक्ति"] },
+    "vichar": { hi: ["विचार"], sa: ["विचारः", "विचार"] },
+    "sankalp": { hi: ["संकल्प", "सङ्कल्प"], sa: ["सङ्कल्पः"] },
+    "prayog": { hi: ["प्रयोग"], sa: ["प्रयोगः", "प्रयोग"] },
+    "tantra": { hi: ["तंत्र", "तन्त्र"], sa: ["तन्त्रम्"] },
+    "yantra": { hi: ["यंत्र", "यन्त्र"], sa: ["यन्त्रम्"] },
+    "mantra": { hi: ["मंत्र", "मन्त्र"], sa: ["मन्त्रः"] },
+    "shloka": { hi: ["श्लोक"], sa: ["श्लोकः", "श्लोक"] },
+    "sukti": { hi: ["सूक्ति"], sa: ["सूक्तिः", "सूक्ति"] },
+    "krishna": { hi: ["कृष्ण"], sa: ["कृष्णः", "कृष्ण"] },
+    "ram": { hi: ["राम"], sa: ["रामः", "राम"] },
+    "shiva": { hi: ["शिव"], sa: ["शिवः", "शिव"] },
+    "devi": { hi: ["देवी"], sa: ["देवी"] },
+    "om": { hi: ["ॐ"], sa: ["ॐ"] },
+    "hai": { hi: ["है"], sa: [] },
+    "hain": { hi: ["हैं"], sa: [] },
+    "aur": { hi: ["और"], sa: [] },
+    "ki": { hi: ["की", "कि"], sa: ["किम्"] },
+    "ke": { hi: ["के"], sa: [] },
+    "ka": { hi: ["का"], sa: ["कः"] },
+    "ko": { hi: ["को"], sa: [] },
+    "se": { hi: ["से"], sa: [] },
+    "mein": { hi: ["में"], sa: [] },
+    "par": { hi: ["पर"], sa: ["परम्"] },
+    "nahi": { hi: ["नहीं"], sa: ["नहि"] },
+    "nahin": { hi: ["नहीं"], sa: ["नहि"] },
+    "kya": { hi: ["क्या"], sa: [] },
+    "kyon": { hi: ["क्यों"], sa: [] },
+    "kaise": { hi: ["कैसे"], sa: [] },
+    "sahitya": { hi: ["साहित्य"], sa: ["साहित्यम्", "साहित्य"] },
+    "vyakaran": { hi: ["व्याकरण"], sa: ["व्याकरणम्", "व्याकरण"] },
+    "shuddh": { hi: ["शुद्ध"], sa: ["शुद्धम्", "शुद्ध"] },
+    "ashuddh": { hi: ["अशुद्ध"], sa: ["अशुद्धम्", "अशुद्ध"] },
+    "sambhav": { hi: ["संभव", "सम्भव"], sa: ["सम्भवः"] },
+    "avashyak": { hi: ["आवश्यक"], sa: ["आवश्यकम्", "आवश्यक"] },
+    "vishesh": { hi: ["विशेष"], sa: ["विशेषः", "विशेष"] },
+    "samanya": { hi: ["सामान्य"], sa: ["सामान्यम्", "सामान्य"] },
+    "adhyaksh": { hi: ["अध्यक्ष"], sa: ["अध्यक्षः", "अध्यक्ष"] },
+    "mantri": { hi: ["मंत्री", "मन्त्री"], sa: ["मन्त्री"] },
+    "sarkar": { hi: ["सरकार"], sa: [] },
+    "nyaya": { hi: ["न्याय"], sa: ["न्यायः", "न्याय"] },
+    "swatantra": { hi: ["स्वतंत्र", "स्वतन्त्र"], sa: ["स्वतन्त्रम्"] },
+    "ganatantra": { hi: ["गणतंत्र", "गणतन्त्र"], sa: ["गणतन्त्रम्"] }
+  };
+
+  // =========================================================================
+  // TIER 3: GRAMMAR-AWARE PHONETIC FALLBACK
+  // =========================================================================
+  function smartPhoneticFallback(word, mode) {
+    let w = word.toLowerCase();
+    let trailingVisarga = false;
+    if (mode === "sanskrit" && /[aeiou]h$/.test(w) && !/(sh|ch|kh|gh|th|dh|ph|bh)$/.test(w)) {
+      w = w.slice(0, -1);
+      trailingVisarga = true;
+    }
+
+    const vowels = {
+      "aa": "आ", "ai": "ऐ", "au": "औ", "ee": "ई", "ii": "ई", "oo": "ऊ", "uu": "ऊ",
+      "ri": "ऋ", "a": "अ", "i": "इ", "u": "उ", "e": "ए", "o": "ओ"
+    };
+    const matras = {
+      "aa": "ा", "ai": "ै", "au": "ौ", "ee": "ी", "ii": "ी", "oo": "ू", "uu": "ू",
+      "ri": "ृ", "a": "", "i": "ि", "u": "ु", "e": "े", "o": "ो"
+    };
+    const cons = {
+      "ksh": "क्ष", "tra": "त्र", "gya": "ज्ञ", "shr": "श्र", "dny": "ज्ञ",
+      "kh": "ख", "gh": "घ", "chh": "छ", "ch": "च", "jh": "झ",
+      "th": "थ", "dh": "ध", "ph": "फ", "bh": "भ", "sh": "श",
+      "k": "क", "g": "ग", "j": "ज", "t": "त", "d": "द", "n": "न",
+      "p": "प", "b": "ब", "m": "म", "y": "य", "r": "र", "l": "ल",
+      "v": "व", "w": "व", "s": "स", "h": "ह"
+    };
+
+    let out = "";
+    let i = 0;
+    while (i < w.length) {
+      let matched = false;
+      if ((w[i] === "n" || w[i] === "m") && i > 0 && i + 1 < w.length && !/[aeiou]/.test(w[i + 1])) {
+        out += "ं";
+        i++;
+        continue;
+      }
+      for (let len of [3, 2, 1]) {
+        let sub = w.slice(i, i + len);
+        if (cons[sub]) {
+          out += cons[sub];
+          i += len;
+          let vMatched = false;
+          for (let vLen of [2, 1]) {
+            let vSub = w.slice(i, i + vLen);
+            if (matras[vSub] !== undefined) {
+              out += matras[vSub];
+              i += vLen;
+              vMatched = true;
+              break;
+            }
+          }
+          if (!vMatched && (i < w.length || mode === "sanskrit")) out += "्";
+          matched = true;
+          break;
+        }
+      }
+      if (matched) continue;
+      for (let vLen of [2, 1]) {
+        let vSub = w.slice(i, i + vLen);
+        if (vowels[vSub]) {
+          out += vowels[vSub];
+          i += vLen;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) { out += w[i]; i++; }
+    }
+    if (trailingVisarga) out += "ः";
+    return out;
+  }
+
+  // =========================================================================
+  // LOOKUP & EDITOR INTERACTION
+  // =========================================================================
+  let currentSuggestions = [];
+  let currentTier = 1;
+  let selectedIndex = 0;
+
+  const editor = document.getElementById("editor");
+  const suggestionBar = document.getElementById("suggestionBar");
+  const toggleTranslit = document.getElementById("toggleTranslit");
+  const langMode = document.getElementById("langMode");
+
+  function lookupWord(rawWord) {
+    const key = rawWord.toLowerCase();
+    const mode = langMode.value;
+    if (customDict[key]) return { suggestions: [...customDict[key]], tier: 1 };
+    if (VERIFIED_LEXICON[key]) {
+      const entry = VERIFIED_LEXICON[key];
+      let results = mode === "hindi" ? entry.hi : mode === "sanskrit" ? entry.sa : [...new Set([...entry.hi, ...entry.sa])];
+      if (results.length > 0) return { suggestions: results, tier: 2 };
+    }
+    if (mode === "both") {
+      return { suggestions: [...new Set([smartPhoneticFallback(rawWord, "hindi"), smartPhoneticFallback(rawWord, "sanskrit")])], tier: 3 };
+    }
+    return { suggestions: [smartPhoneticFallback(rawWord, mode)], tier: 3 };
+  }
+
+  function getCurrentWordInfo() {
+    const pos = editor.selectionStart;
+    const textBefore = editor.value.slice(0, pos);
+    const match = textBefore.match(/([a-zA-Z]+)$/);
+    if (!match) return null;
+    return { word: match[1], start: pos - match[1].length, end: pos };
+  }
+
+  function updateSuggestions() {
+    if (!toggleTranslit.checked) {
+      currentSuggestions = [];
+      suggestionBar.innerHTML = `<span style="color:var(--muted); font-size:0.85rem;">Transliteration paused (English mode)</span>`;
+      return;
+    }
+    const info = getCurrentWordInfo();
+    if (!info) {
+      currentSuggestions = [];
+      suggestionBar.innerHTML = `<span style="color:var(--muted); font-size:0.85rem;">Start typing in Roman to see precision suggestions...</span>`;
+      return;
+    }
+    const res = lookupWord(info.word);
+    currentSuggestions = res.suggestions;
+    currentTier = res.tier;
+    selectedIndex = 0;
+    renderSuggestions(info.word);
+  }
+
+  function renderSuggestions(rawWord) {
+    suggestionBar.innerHTML = "";
+    currentSuggestions.forEach((item, idx) => {
+      const btn = document.createElement("div");
+      btn.className = "suggestion-chip" + (idx === selectedIndex ? " active" : "");
+      btn.innerHTML = `<span class="num">${idx + 1}</span> ${item}`;
+      btn.onclick = () => applySuggestion(item, true);
+      suggestionBar.appendChild(btn);
+    });
+
+    const engBtn = document.createElement("div");
+    engBtn.className = "suggestion-chip";
+    engBtn.style.borderColor = "#94a3b8";
+    engBtn.innerHTML = `<span class="num">Esc</span> ${rawWord}`;
+    engBtn.onclick = () => applySuggestion(rawWord, true);
+    suggestionBar.appendChild(engBtn);
+
+    if (currentTier > 1) {
+      const lockBtn = document.createElement("button");
+      lockBtn.className = "secondary";
+      lockBtn.style.fontSize = "0.76rem";
+      lockBtn.style.padding = "5px 8px";
+      lockBtn.textContent = "+ Lock Rule";
+      lockBtn.onclick = () => {
+        customDict[rawWord.toLowerCase()] = [currentSuggestions[selectedIndex]];
+        saveDict();
+        showToast(`Locked: ${rawWord.toLowerCase()} → ${currentSuggestions[selectedIndex]}`);
+        updateSuggestions();
+      };
+      suggestionBar.appendChild(lockBtn);
+    }
+
+    const badge = document.createElement("span");
+    badge.className = "badge tier" + currentTier;
+    badge.textContent =
+      currentTier === 1 ? "Tier 1: Custom Rule" :
+      currentTier === 2 ? "Tier 2: Lexicon" : "Tier 3: Fallback";
+    suggestionBar.appendChild(badge);
+  }
+
+  function applySuggestion(chosenWord, addSpace = false) {
+    const info = getCurrentWordInfo();
+    if (!info) return;
+    const before = editor.value.slice(0, info.start);
+    const after = editor.value.slice(info.end);
+    const suffix = addSpace ? " " : "";
+    editor.value = before + chosenWord + suffix + after;
+    const newPos = before.length + chosenWord.length + suffix.length;
+    editor.setSelectionRange(newPos, newPos);
+    editor.focus();
+    currentSuggestions = [];
+    updateSuggestions();
+  }
+
+  editor.addEventListener("input", updateSuggestions);
+  editor.addEventListener("click", updateSuggestions);
+
+  editor.addEventListener("keydown", (e) => {
+    if (!toggleTranslit.checked || currentSuggestions.length === 0) return;
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      applySuggestion(currentSuggestions[selectedIndex], e.key === " ");
+      if (e.key === "Enter") {
+        const pos = editor.selectionStart;
+        editor.value = editor.value.slice(0, pos) + "\n" + editor.value.slice(pos);
+        editor.setSelectionRange(pos + 1, pos + 1);
+      }
+    } else if (e.key >= "1" && e.key <= "9") {
+      const idx = parseInt(e.key, 10) - 1;
+      if (currentSuggestions[idx]) {
+        e.preventDefault();
+        applySuggestion(currentSuggestions[idx], true);
+      }
+    } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      if (currentSuggestions.length > 1) {
+        e.preventDefault();
+        selectedIndex = (selectedIndex + 1) % currentSuggestions.length;
+        renderSuggestions(getCurrentWordInfo().word);
+      }
+    } else if (e.key === "Escape") {
+      const info = getCurrentWordInfo();
+      if (info) {
+        e.preventDefault();
+        applySuggestion(info.word, true);
+      }
+    }
+  });
+
+  // =========================================================================
+  // DICTIONARY SAVE (Local + Cloud Sync)
+  // =========================================================================
+  function saveDict() {
+    localStorage.setItem("precision_indic_dict_v3", JSON.stringify(customDict));
+    renderDictList();
+    if (activeSyncKey) pushToCloud(activeSyncKey);
+  }
+
+  function renderDictList() {
+    const list = document.getElementById("dictList");
+    const filter = document.getElementById("searchDict").value.trim().toLowerCase();
+    list.innerHTML = "";
+    Object.keys(customDict).sort().forEach((key) => {
+      if (filter && !key.includes(filter) && !customDict[key].join(",").includes(filter)) return;
+      const row = document.createElement("div");
+      row.className = "dict-item";
+      row.innerHTML = `
+        <div>
+          <span class="dict-key">${key}</span> &rarr;
+          <span>${customDict[key].join(", ")}</span>
+        </div>
+        <button class="danger" onclick="deleteRule('${key}')">Delete</button>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  function addRule() {
+    const roman = document.getElementById("newRoman").value.trim().toLowerCase();
+    const devaRaw = document.getElementById("newDeva").value.trim();
+    if (!roman || !devaRaw) return showToast("Enter both Roman and Devanagari words.");
+    customDict[roman] = devaRaw.split(",").map(s => s.trim()).filter(Boolean);
+    saveDict();
+    document.getElementById("newRoman").value = "";
+    document.getElementById("newDeva").value = "";
+    showToast(`Saved & Synced: ${roman}`);
+  }
+
+  function deleteRule(key) {
+    delete customDict[key];
+    saveDict();
+    showToast(`Removed "${key}"`);
+  }
+
+  function importBulk() {
+    const lines = document.getElementById("bulkInput").value.split("\n");
+    let count = 0;
+    lines.forEach(line => {
+      const parts = line.split("=");
+      if (parts.length === 2) {
+        const k = parts[0].trim().toLowerCase();
+        const vals = parts[1].split(",").map(s => s.trim()).filter(Boolean);
+        if (k && vals.length) { customDict[k] = vals; count++; }
+      }
+    });
+    saveDict();
+    document.getElementById("bulkInput").value = "";
+    switchTab("single");
+    showToast(`Imported & Synced ${count} rules!`);
+  }
+
+  function exportRules() {
+    const blob = new Blob([JSON.stringify(customDict, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "precision-indic-rules.json";
+    a.click();
+  }
+
+  function switchTab(tab) {
+    document.getElementById("panelSingle").style.display = tab === "single" ? "block" : "none";
+    document.getElementById("panelBulk").style.display = tab === "bulk" ? "block" : "none";
+    document.getElementById("tabSingle").classList.toggle("active", tab === "single");
+    document.getElementById("tabBulk").classList.toggle("active", tab === "bulk");
+  }
+
+  function copyText() {
+    navigator.clipboard.writeText(editor.value);
+    showToast("Copied to clipboard!");
+  }
+
+  function clearEditor() {
+    editor.value = "";
+    updateSuggestions();
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.style.display = "block";
+    setTimeout(() => t.style.display = "none", 2200);
+  }
+
+  renderDictList();
+</script>
+</body>
+</html>
